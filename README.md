@@ -4,6 +4,8 @@
 
 MorSTORM processes single-molecule localization microscopy data in three modules. It localizes TIFF movies with ThunderSTORM or Picasso, estimates drift, and measures XY morphology through Fiji/MorphoLibJ. The bilingual desktop workspace supports individual modules, ordered combinations, single files and folders.
 
+Each stage has an **Advanced…** button for the selected algorithm. The panels show units, current values, audit defaults, and fixed settings. Import, save, and restore controls let both variants use the same parameter preset. [Desktop setup and presets](docs/INSTALL.md#start-the-desktop-workspace)
+
 ![English MorSTORM desktop workspace](docs/images/workspace-en.png)
 
 | Capability | Variant A | Variant B |

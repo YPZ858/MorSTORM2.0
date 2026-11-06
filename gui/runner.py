@@ -145,35 +145,46 @@ def make_job(profile, engine, source, folder_mode, modules, output_base, pixel, 
     raw = 'localize' in modules
     if raw != (profile.mode=='raw'):
         raise ValueError('The profile input mode does not match the selected modules.')
+    cfg = configured_profile(profile, modules, pixel, period, camera, render_pixel)
+    token = datetime.now().strftime('%Y%m%d-%H%M%S')+'-'+uuid4().hex[:6]
+    output = Path(output_base).expanduser().resolve()/f'morstorm-{token}'
+    cfg['execution_engine'] = engine
+    return Job(engine,Path(source).expanduser().resolve(),folder_mode,modules,cfg,output)
+
+
+def configured_profile(profile, modules, pixel, period, camera, render_pixel):
     cfg = deepcopy(profile.config)
     pixel = number(pixel,'Camera pixel size')
     cfg['input']['pixel_size_nm'] = pixel
     cfg['drift']['pixel_size_nm'] = pixel
     if 'drift' in modules:
-        period = number(period,'Time bins' if profile.method=='meanshift' else 'Frames per segment',integer=True)
+        bins = profile.method == 'meanshift'
+        period = number(period,'Time bins' if bins else 'Frames per segment',integer=True,minimum=1 if bins else 0)
         if profile.method=='meanshift':
             cfg['drift']['parameters']['meanshift']['nTimeBin'] = period
         else:
             cfg['drift']['segment_frames'] = period
     if 'morphology' in modules:
         cfg['render']['pixel_size_nm'] = number(render_pixel,'Render pixel size')
-    if raw:
-        camera = parse_camera(profile,camera)
+    if 'localize' in modules:
         loc = cfg['localization']
         loc['pixel_size_nm'] = pixel
-        if profile.backend=='Picasso':
+        if camera is not None:
+            camera = parse_camera(profile,camera)
+        if profile.backend=='Picasso' and camera is not None:
             loc['camera'] = {k:camera[k] for k in ('baseline','sensitivity','gain')}
             loc.update(box_size=camera['box_size'],min_net_gradient=camera['min_net_gradient'])
-        else:
-            for key,value in (('offset',camera['offset']),('photons2adu',camera['photons2adu']),('pixelsize',pixel)):
-                loc['camera_options'] = re.sub(rf'\b{key}=[^ ]+',f'{key}={value:g}',loc['camera_options'])
-            loc['analysis_options'] = re.sub(r'\bthreshold=[\d.]+\*std\(Wave.F1\)',
-                f'threshold={camera["threshold_sigma"]:g}*std(Wave.F1)',loc['analysis_options'])
-    token = datetime.now().strftime('%Y%m%d-%H%M%S')+'-'+uuid4().hex[:6]
-    output = Path(output_base).expanduser().resolve()/f'morstorm-{token}'
+        if profile.backend=='ThunderSTORM':
+            if camera is not None:
+                for key in ('offset','photons2adu'):
+                    loc['camera_options'] = re.sub(rf'\b{key}=[^ ]+',f'{key}={camera[key]:g}',loc['camera_options'])
+                loc['analysis_options'] = re.sub(r'\bthreshold=[\d.]+\*std\(Wave.F1\)',
+                    f'threshold={camera["threshold_sigma"]:g}*std(Wave.F1)',loc['analysis_options'])
+            macro = re.sub(r'(?i)(?<!\S)pixelsize=(?:\[[^\]]*\]|\S+)', '', loc['camera_options']).strip()
+            loc['camera_options'] = f'{macro} pixelsize={pixel:.17g}'.strip()
     cfg['modules'] = list(modules)
-    cfg['execution_engine'] = engine
-    return Job(engine,Path(source).expanduser().resolve(),folder_mode,modules,cfg,output)
+    cfg['parameter_preset'] = profile.backend
+    return cfg
 
 
 def inputs(job):
@@ -340,9 +351,12 @@ def command(job, config_path):
 
 
 def save_json(path, value):
-    temporary = path.with_name(f'.{path.name}.tmp')
-    temporary.write_text(json.dumps(value,indent=2,ensure_ascii=False)+'\n',encoding='utf-8')
-    temporary.replace(path)
+    temporary = path.with_name(f'.{path.name}.{uuid4().hex}.tmp')
+    try:
+        temporary.write_text(json.dumps(value,indent=2,ensure_ascii=False)+'\n',encoding='utf-8')
+        temporary.replace(path)
+    finally:
+        temporary.unlink(missing_ok=True)
 
 
 def fingerprint(source):

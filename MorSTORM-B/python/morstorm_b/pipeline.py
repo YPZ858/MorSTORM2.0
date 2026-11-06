@@ -88,7 +88,7 @@ def run(config, method=None, output_dir=None):
     output = (base / output).resolve()
     # One run, one fresh directory: no stale morphology tables after failures.
     output.mkdir(parents=True, exist_ok=False)
-    manifest = {"schema_version": 1, "morstorm_version": "0.5.0rc1", "language": "python", "variant": "B", "matlab_required": False,
+    manifest = {"schema_version": 1, "morstorm_version": "0.6.0rc1", "language": "python", "variant": "B", "matlab_required": False,
                 "started_utc": datetime.now(timezone.utc).isoformat(), "status": "running",
                 "config": cfg, "python": platform.python_version(), "packages": {}}
     for pkg in ("numpy", "scipy", "pandas", "numba", "tifffile", "h5py", "picassosr"):

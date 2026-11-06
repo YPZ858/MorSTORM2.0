@@ -28,7 +28,7 @@ safeConfig=cfg;
 if isfield(safeConfig,'drift')&&isfield(safeConfig.drift,'function')
     safeConfig.drift.function=func2str(safeConfig.drift.function);
 end
-manifest=struct('schema_version',1,'morstorm_version','0.5.0rc1','language','matlab',...
+manifest=struct('schema_version',1,'morstorm_version','0.6.0rc1','language','matlab',...
     'started_utc',utcnow(),'status','running','config',safeConfig,'matlab_version',version);
 save_json(fullfile(folder,'manifest.json'),manifest);
 try

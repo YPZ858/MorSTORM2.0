@@ -34,6 +34,10 @@ A's author installer contacts the upstream GitHub and Zenodo archives and checks
 
 Double-click `Start-English.cmd` or `Start-Chinese.cmd`, or run `python gui/app.py --lang en` from the configured environment. Select variant A or B at the top. Choose localization to start with a single-channel TIFF stack. With localization unchecked, select a table for drift and/or morphology. File folders are scanned at one level. Picasso multipart stacks should be exported as one stack per acquisition before using folder mode.
 
+Use **Advanced…** beside an enabled stage to open the panel for the selected algorithm. The **Audit default** column shows the preset used in the original validation and the adapter defaults for options omitted by that preset. The note above the table describes fixed settings. In ThunderSTORM, named controls are passed as ImageJ macro options. Use the additional options fields for other filter or fitter settings from your plugin. Leave an optional field blank to omit it.
+
+**Save preset as…** writes a schema-1 JSON file with the selected stages and algorithm settings. **Import preset…** accepts these files, the templates under `profiles/`, and compatible `run-config.json` files from earlier GUI runs. The workspace uses its own dependency paths and its current A/B selection. Select the input file or folder for the new run in the main window. **Restore audit values** reloads the audit settings for the selected workflow and clears custom edits across the panels.
+
 For a local Fiji test using the synthetic CSV, select B and MeanShift, uncheck localization, select `MorSTORM-B/examples/demo_thunderstorm.csv`, set the camera pixel to `160` and the MeanShift time bins to `8`. Morphology uses Fiji if selected. Each run writes a fresh result directory under the chosen parent.
 
 ## Use the CLI and MATLAB

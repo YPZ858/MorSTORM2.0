@@ -2,7 +2,7 @@ cff-version: 1.2.0
 message: "Please cite this MorSTORM extension and the original methods used in your analysis. See THIRD_PARTY.md."
 title: "MorSTORM dual variant SMLM workspace"
 type: software
-version: "0.5.0-rc.1"
+version: "0.6.0-rc.1"
 authors:
   - name: "MorSTORM contributors"
 license: GPL-3.0-or-later

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "morstorm-dual"
-version = "0.5.0rc1"
+version = "0.6.0rc1"
 description = "Modular SMLM localization, drift correction and MorphoLibJ analysis"
 readme = "README.md"
 license = {file = "LICENSE"}

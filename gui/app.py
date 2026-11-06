@@ -1,5 +1,6 @@
 """Bilingual desktop workspace for independent and chained MorSTORM modules."""
 import argparse
+from copy import deepcopy
 import os
 from pathlib import Path
 from queue import Empty, Queue
@@ -8,6 +9,7 @@ from time import monotonic
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
+import parameters
 import runner
 
 
@@ -17,7 +19,7 @@ ZH = {
     'B runs without MATLAB.':'B 版独立运行，无需 MATLAB。',
     'Workflow and input':'流程与输入', 'Modules run in the order shown.':'按下列顺序运行所选模块。',
     '1  Localization':'1  定位', '2  Drift correction':'2  漂移校正', '3  Morphology':'3  形态分析',
-    'Localizer':'定位器', 'Camera settings':'相机与检测参数', 'Drift method':'漂移方法',
+    'Localizer':'定位器', 'Drift method':'漂移方法',
     'Parameter preset':'参数预设', 'Time bins':'时间箱数', 'Frames per segment':'每段帧数',
     'Render pixel (nm)':'渲染像素（nm）', 'Camera pixel (nm)':'相机像素（nm）',
     'Scope':'处理范围', 'Single file':'单文件', 'Folder':'文件夹', 'Input':'输入',
@@ -35,9 +37,7 @@ ZH = {
     'Choose an existing coordinate table or a folder of tables.':'选择已有坐标表或坐标表文件夹。',
     'Morphology will use the input coordinates as supplied.':'形态分析将直接使用输入坐标。',
     'Morphology will use the uncorrected localization output.':'形态分析将使用未经漂移校正的定位结果。',
-    'Audit settings are specific to the original sample.':'审计参数仅针对原样本。',
     'Confirm camera calibration and segmentation for new data.':'换数据时请核对相机标定和分段。',
-    'Unweighted MeanShift · outlier threshold 250 nm':'非加权 MeanShift · 离群阈值 250 nm',
     'Search radii {a:g} / {b:g} px · resampling {fold}':'搜索半径 {a:g} / {b:g} px · 重采样 {fold}',
     'Use the full stack for the initial frame check.':'预检使用 TIFF 堆栈帧数，定位后仍会检查有效帧。',
     'Input frame range ends at {frames:,}.':'输入帧范围截至 {frames:,}。',
@@ -47,13 +47,16 @@ ZH = {
     '{n:,} localizations':'{n:,} 个定位点', 'Apply':'应用',
     'Task in progress':'任务运行中', 'Close the window after the current job finishes.':'请在当前任务结束后关闭窗口。',
     'Select input file':'选择输入文件', 'Select input folder':'选择输入文件夹', 'Select output parent':'选择结果父目录',
-    'Camera baseline (ADU)':'相机基线（ADU）', 'Camera offset (ADU)':'相机偏置（ADU）',
-    'Sensitivity':'相机灵敏度', 'Gain':'增益', 'Box size (px)':'拟合框（px）',
-    'Minimum net gradient':'最小净梯度', 'Wavelet threshold multiplier':'小波阈值倍数',
+    'Advanced…':'高级参数…', 'Import preset…':'导入预设…', 'Save preset as…':'另存预设…',
+    'Parameter':'参数', 'Unit':'单位', 'Value':'当前值', 'Audit default':'实测预设值',
+    'Not specified':'未指定', 'Cancel':'取消', 'MorphoLibJ parameters':'MorphoLibJ 参数',
+    '{method} parameters':'{method} 参数', 'Preset imported: {name}':'已导入预设：{name}',
+    'Preset saved: {name}':'已保存预设：{name}', 'Audit parameters restored.':'已恢复实测参数。',
+    'Preset import failed':'导入预设失败', 'Preset save failed':'保存预设失败',
+    'Algorithm parameters are shared by A and B.':'A、B 版共用算法参数。',
+    'MeanShift · error weighting {weight} · outlier threshold {threshold:g} nm':'MeanShift · 误差加权 {weight} · 离群阈值 {threshold:g} nm',
+    'on':'开启', 'off':'关闭',
 }
-CAMERA_FIELDS = {'baseline':'Camera baseline (ADU)','offset':'Camera offset (ADU)',
-                 'sensitivity':'Sensitivity','gain':'Gain','photons2adu':'photons2ADU','box_size':'Box size (px)',
-                 'min_net_gradient':'Minimum net gradient','threshold_sigma':'Wavelet threshold multiplier'}
 STAGE_TEXT = {'localize':'Localization','drift':'Drift correction','morphology':'Morphology'}
 WORKFLOW_LABELS = dict(zip(runner.MODULES,('1  Localization','2  Drift correction','3  Morphology')))
 BG, WHITE, INK, MUTED, BLUE, ICE, EDGE = '#edf2f6','#ffffff','#17324a','#5d7283','#126b8d','#e8f4fa','#d2dfe9'
@@ -84,7 +87,7 @@ class Workspace:
         self.queue = Queue()
         self.running = False
         self.controls = []
-        self.camera = {}
+        self.parameter_edits = {}
         self.profile = None
         self.job = self.current = None
         self.offsets = {}
@@ -168,7 +171,7 @@ class Workspace:
         loc=ttk.Frame(left); loc.grid(row=2,column=1,columnspan=2,sticky='ew',padx=(7,0))
         self.loc_combo=self.combo(loc,self.backend,runner.BACKENDS,self.sync,width=17)
         self.loc_combo.pack(side='left',padx=(0,6))
-        self.camera_button=self.button(loc,'Camera settings',self.edit_camera)
+        self.camera_button=self.button(loc,'Advanced…',lambda:self.edit_parameters(self.profile.backend))
         self.camera_button.pack(side='left')
         drift=ttk.Frame(left); drift.grid(row=3,column=1,columnspan=2,sticky='ew',padx=(7,0))
         self.method_combo=self.combo(drift,self.method,tuple(runner.METHODS),self.sync,width=13)
@@ -177,9 +180,13 @@ class Workspace:
         self.preset_combo=self.combo(drift,self.preset,runner.BACKENDS,self.sync,width=17)
         self.label(drift,'Parameter preset',style='Hint.TLabel').grid(row=0,column=1,sticky='w')
         self.preset_combo.grid(row=1,column=1,sticky='w')
+        self.drift_button=self.button(drift,'Advanced…',lambda:self.edit_parameters(self.profile.method))
+        self.drift_button.grid(row=1,column=2,sticky='w',padx=(6,0))
         morph=ttk.Frame(left); morph.grid(row=4,column=1,columnspan=2,sticky='w',padx=(7,0))
         self.label(morph,'Render pixel (nm)').pack(side='left',padx=(0,6))
         self.render_entry=self.entry(morph,self.render_pixel,6); self.render_entry.pack(side='left')
+        self.morph_button=self.button(morph,'Advanced…',lambda:self.edit_parameters('morphology'))
+        self.morph_button.pack(side='left',padx=(6,0))
         ttk.Separator(left).grid(row=5,column=0,columnspan=3,sticky='ew',pady=8)
         self.label(left,'Scope').grid(row=6,column=0,sticky='w',pady=3)
         self.combo(left,self.scope,(self.t('Single file'),self.t('Folder')),self.sync).grid(row=6,column=1,columnspan=2,sticky='ew',pady=3)
@@ -190,14 +197,18 @@ class Workspace:
         self.entry(settings,self.pixel,7).pack(side='left',padx=(0,11))
         ttk.Label(settings,textvariable=self.period_label).pack(side='left',padx=(0,5))
         self.period_entry=self.entry(settings,self.period,7); self.period_entry.pack(side='left')
-        self.button(settings,'Restore audit values',lambda:self.sync(reset=True)).pack(side='right',padx=(6,0))
+        presets=ttk.Frame(left); presets.grid(row=10,column=0,columnspan=3,sticky='ew',pady=(2,6))
+        self.button(presets,'Import preset…',self.import_preset).pack(side='left',padx=(0,5))
+        self.save_button=self.button(presets,'Save preset as…',self.save_preset)
+        self.save_button.pack(side='left',padx=(0,5))
+        self.button(presets,'Restore audit values',self.restore_audit).pack(side='left')
         hint=ttk.Label(left,textvariable=self.hint,style='Hint.TLabel',wraplength=470,justify='left')
-        hint.grid(row=10,column=0,columnspan=3,sticky='ew',pady=(2,6))
+        hint.grid(row=11,column=0,columnspan=3,sticky='ew',pady=(2,6))
         preview=ttk.Label(left,textvariable=self.preview,style='Preview.TLabel',wraplength=470,justify='left')
-        preview.grid(row=11,column=0,columnspan=3,sticky='ew',pady=(0,7))
+        preview.grid(row=12,column=0,columnspan=3,sticky='ew',pady=(0,7))
         left.bind('<Configure>',lambda e:self.resize_labels(e.width,(hint,preview)))
         self.start_button=self.button(left,'Run selected modules',self.start,style='Start.TButton')
-        self.start_button.grid(row=12,column=0,columnspan=3,sticky='ew')
+        self.start_button.grid(row=13,column=0,columnspan=3,sticky='ew')
 
         self.label(right,'Run and results',style='Heading.TLabel').grid(row=0,column=0,sticky='w',pady=(0,8))
         ttk.Label(right,textvariable=self.phase,style='Status.TLabel').grid(row=1,column=0,sticky='ew')
@@ -248,17 +259,22 @@ class Workspace:
             self.preset.set(backend)
         try:
             self.profile=runner.load_profile('raw' if raw else 'cached',backend,runner.METHODS[self.method.get()])
+            self.audit_profile=runner.Profile(self.profile.mode,self.profile.backend,self.profile.method,
+                                              deepcopy(self.profile.config))
+            panels=(backend,self.profile.method,'morphology') if raw else (self.profile.method,'morphology')
+            for panel in panels:
+                edits=self.parameter_edits.get(parameters.section_key(panel,backend))
+                if edits:
+                    parameters.set_values(self.profile.config,panel,edits)
         except (OSError,ValueError) as error:
             self.profile=None
             self.detail.set(str(error))
         changed_kind=before is None or self.profile is None or before.mode!=self.profile.mode
-        if reset or changed_kind or self.folder_mode()!=getattr(self,'was_folder',False):
+        if changed_kind or self.folder_mode()!=getattr(self,'was_folder',False):
             path=str(self.profile.source) if raw and not self.folder_mode() and self.profile and self.profile.source else ''
             self.source.set(path)
             self.root.after_idle(self.input_entry.xview_moveto,1)
         self.was_folder=self.folder_mode()
-        if self.profile and (reset or changed_kind or before.backend!=self.profile.backend):
-            self.camera=runner.camera_values(self.profile)
         if self.profile and (reset or changed_kind or before.backend!=self.profile.backend or before.method!=self.profile.method):
             self.period.set(str(self.profile.period))
         if reset and self.profile:
@@ -266,15 +282,19 @@ class Workspace:
             self.render_pixel.set(str(self.profile.config['render']['pixel_size_nm']))
         self.period_label.set(self.t('Time bins' if self.method.get()=='MeanShift' else 'Frames per segment'))
         self.version_note.set(self.t('A drift uses the author MATLAB code.' if self.version.get()=='A' else 'B runs without MATLAB.'))
-        for widget,on in ((self.engine_combo,self.version.get()=='A'),(self.loc_combo,raw),(self.camera_button,raw and self.profile is not None),
+        ready=self.profile is not None
+        for widget,on in ((self.engine_combo,self.version.get()=='A'),(self.loc_combo,raw),(self.camera_button,raw and ready),
                           (self.method_combo,drift),(self.preset_combo,drift and not raw),(self.period_entry,drift),
-                          (self.render_entry,morph),(self.start_button,bool(chosen) and self.profile is not None)):
+                          (self.drift_button,drift and ready),(self.morph_button,morph and ready),
+                          (self.render_entry,morph),(self.start_button,bool(chosen) and ready),(self.save_button,bool(chosen) and ready)):
             widget.state(['!disabled'] if on else ['disabled'])
         self.update_hint()
-        lines=[self.t('Audit settings are specific to the original sample.'),self.t('Confirm camera calibration and segmentation for new data.')]
+        lines=[self.t('Algorithm parameters are shared by A and B.'),self.t('Confirm camera calibration and segmentation for new data.')]
         if self.profile and drift:
             if self.profile.method=='meanshift':
-                lines.append(self.t('Unweighted MeanShift · outlier threshold 250 nm'))
+                p=parameters.values(self.profile.config,'meanshift')
+                lines.append(self.t('MeanShift · error weighting {weight} · outlier threshold {threshold:g} nm',
+                                    weight=self.t('on' if p['calc_error'] else 'off'),threshold=p['outlier_error']))
             elif self.profile.method in ('npcloud','rrnpcloud'):
                 p=self.profile.config['drift']['parameters']['npcloud']
                 lines.append(self.t('Search radii {a:g} / {b:g} px · resampling {fold}',a=p['MaxSearchRadius_Pix1'],b=p['MaxSearchRadius_Pix2'],fold=p['ReSampleFold']))
@@ -307,22 +327,116 @@ class Workspace:
             self.output.set(path)
             self.root.after_idle(self.out_entry.xview_moveto,1)
 
-    def edit_camera(self):
-        dialog=tk.Toplevel(self.root); dialog.title(self.t('Camera settings')); dialog.transient(self.root); dialog.grab_set()
-        panel=ttk.Frame(dialog,padding=14); panel.pack(fill='both',expand=True)
-        vars={k:tk.StringVar(value=f'{v:g}') for k,v in self.camera.items()}
-        for i,(key,var) in enumerate(vars.items()):
-            self.label(panel,CAMERA_FIELDS[key]).grid(row=i,column=0,sticky='w',padx=(0,10),pady=3)
-            ttk.Entry(panel,textvariable=var,width=16).grid(row=i,column=1,pady=3)
+    def edit_parameters(self, name):
+        profile=self.profile
+        language=1 if self.lang=='zh' else 0
+        title=next((label for label,method in runner.METHODS.items() if method==name),name)
+        dialog=tk.Toplevel(self.root)
+        dialog.title(self.t('MorphoLibJ parameters') if name=='morphology' else self.t('{method} parameters',method=title))
+        dialog.geometry('820x620' if name=='ThunderSTORM' else '750x440')
+        dialog.minsize(600,340)
+        dialog.transient(self.root)
+        dialog.grab_set()
+        ttk.Label(dialog,text=parameters.FIXED[name][language],wraplength=570,justify='left',padding=10).pack(fill='x')
+        frame=ttk.Frame(dialog,padding=(10,0))
+        frame.pack(fill='both',expand=True)
+        canvas=tk.Canvas(frame,bg=WHITE,highlightthickness=0)
+        scroll=ttk.Scrollbar(frame,command=canvas.yview)
+        scroll.pack(side='right',fill='y')
+        canvas.pack(side='left',fill='both',expand=True)
+        canvas.configure(yscrollcommand=scroll.set)
+        panel=ttk.Frame(canvas)
+        panel.columnconfigure(2,weight=1)
+        window=canvas.create_window(0,0,window=panel,anchor='nw')
+        panel.bind('<Configure>',lambda _event:canvas.configure(scrollregion=canvas.bbox('all')))
+        canvas.bind('<Configure>',lambda event:canvas.itemconfigure(window,width=event.width))
+        dialog.bind('<MouseWheel>',lambda event:canvas.yview_scroll(-int(event.delta/120),'units'))
+        current=parameters.values(profile.config,name)
+        defaults=parameters.values(self.audit_profile.config,name)
+        shared={'camera_pixel':self.pixel,'render_pixel':self.render_pixel,
+                'segment_frames':self.period,'nTimeBin':self.period}
+        for index,label in enumerate(('Parameter','Unit','Value','Audit default')):
+            self.label(panel,label).grid(row=0,column=index,sticky='w',padx=5,pady=(0,4))
+        fields={}
+        for row,field in enumerate(parameters.FIELDS[name],1):
+            unit=field.unit.split(' / ')[-1 if language else 0]
+            self.label(panel,field.zh if language else field.en).grid(row=row,column=0,sticky='w',padx=5,pady=3)
+            self.label(panel,unit,style='Hint.TLabel').grid(row=row,column=1,sticky='w',padx=5,pady=3)
+            value=shared[field.key].get() if field.key in shared else parameters.display(current.get(field.key))
+            variable=tk.StringVar(value=value)
+            fields[field.key]=variable
+            if field.choices:
+                choices=(('',)+field.choices) if field.optional else field.choices
+                control=ttk.Combobox(panel,textvariable=variable,values=choices,state='readonly',width=13)
+            else:
+                control=ttk.Entry(panel,textvariable=variable,width=19)
+            control.grid(row=row,column=2,sticky='ew',padx=5,pady=3)
+            default=parameters.display(defaults.get(field.key)) or self.t('Not specified')
+            ttk.Label(panel,text=default,wraplength=144,style='Hint.TLabel').grid(row=row,column=3,sticky='w',padx=5,pady=3)
+
         def apply():
+            edits={key:variable.get() for key,variable in fields.items()}
             try:
-                self.camera=runner.parse_camera(self.profile,{k:v.get() for k,v in vars.items()})
+                candidate=deepcopy(profile.config)
+                parameters.set_values(candidate,name,edits)
             except ValueError as error:
                 messagebox.showerror(self.t('Check settings'),str(error),parent=dialog)
-            else:
-                dialog.destroy()
-        ttk.Button(panel,text=self.t('Apply'),command=apply).grid(row=len(vars),column=1,sticky='e',pady=(6,0))
+                return
+            self.parameter_edits[parameters.section_key(name,profile.backend)]=edits
+            for key,var in shared.items():
+                if key in edits:
+                    var.set(edits[key])
+            dialog.destroy()
+            self.sync()
+
+        actions=ttk.Frame(dialog,padding=10)
+        actions.pack(fill='x')
+        ttk.Button(actions,text=self.t('Apply'),command=apply).pack(side='right')
+        ttk.Button(actions,text=self.t('Cancel'),command=dialog.destroy).pack(side='right',padx=(0,6))
         dialog.bind('<Return>',lambda _e:apply())
+        dialog.bind('<Escape>',lambda _e:dialog.destroy())
+
+    def restore_audit(self):
+        self.parameter_edits.clear()
+        self.sync(reset=True)
+        self.detail.set(self.t('Audit parameters restored.'))
+
+    def import_preset(self):
+        path=filedialog.askopenfilename(parent=self.root,title=self.t('Import preset…'),filetypes=[('JSON','*.json')])
+        if not path:
+            return
+        try:
+            profile,modules=parameters.import_preset(Path(path),self.preset.get())
+        except (OSError,ValueError) as error:
+            messagebox.showerror(self.t('Preset import failed'),str(error),parent=self.root)
+            return
+        panels=(profile.backend,profile.method,'morphology') if profile.mode=='raw' else (profile.method,'morphology')
+        for name in panels:
+            self.parameter_edits[parameters.section_key(name,profile.backend)]=parameters.values(profile.config,name)
+        for module,variable in self.modules.items():
+            variable.set(module in modules)
+        self.backend.set(profile.backend)
+        self.preset.set(profile.backend)
+        self.method.set(next(label for label,method in runner.METHODS.items() if method==profile.method))
+        self.sync(reset=True)
+        self.pixel.set(parameters.display(profile.config['input']['pixel_size_nm']))
+        self.detail.set(self.t('Preset imported: {name}',name=Path(path).name))
+
+    def save_preset(self):
+        try:
+            config=parameters.export_preset(self.profile,self.selected(),self.pixel.get(),self.period.get(),self.render_pixel.get())
+        except ValueError as error:
+            messagebox.showerror(self.t('Preset save failed'),str(error),parent=self.root)
+            return
+        path=filedialog.asksaveasfilename(parent=self.root,title=self.t('Save preset as…'),defaultextension='.json',
+                                          initialfile=f'{self.profile.backend.lower()}-{self.profile.method}.json',filetypes=[('JSON','*.json')])
+        if path:
+            try:
+                runner.save_json(Path(path),config)
+            except OSError as error:
+                messagebox.showerror(self.t('Preset save failed'),str(error),parent=self.root)
+            else:
+                self.detail.set(self.t('Preset saved: {name}',name=Path(path).name))
 
     def start(self):
         if self.running or self.profile is None:
@@ -330,7 +444,7 @@ class Workspace:
         try:
             engine='B Python' if self.version.get()=='B' else f'A {self.a_entry.get()}'
             self.job=runner.make_job(self.profile,engine,self.source.get(),self.folder_mode(),self.selected(),self.output.get(),
-                                     self.pixel.get(),self.period.get(),self.camera,self.render_pixel.get())
+                                     self.pixel.get(),self.period.get(),None,self.render_pixel.get())
         except (OSError,ValueError) as error:
             self.phase.set(self.t('Check settings')); self.detail.set(str(error)); return
         self.running=True; self.current=None; self.done=self.total=0; self.started=monotonic()

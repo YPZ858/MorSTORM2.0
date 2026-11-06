@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "morstorm-standalone"
-version = "0.5.0rc1"
+version = "0.6.0rc1"
 description = "MorSTORM B: standalone Python ports with original-author numerical validation"
 readme = "README.md"
 license = {file = "LICENSE"}

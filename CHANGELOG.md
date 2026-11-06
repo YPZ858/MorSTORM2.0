@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.0-rc.1
+
+- Adds bilingual parameter panels for Picasso, ThunderSTORM, MeanShift, NP-Cloud, RR-NP Cloud, AIM, and MorphoLibJ. Each panel shows units, active values, audited defaults, and fixed settings.
+- Imports and saves shared schema-1 parameter presets. A and B use the same algorithm settings. Restore audit values reloads the original settings for the selected workflow.
+- Exposes Picasso MLE tolerance, iteration limit, and Gaussian width model. ThunderSTORM accepts named settings and additional ImageJ macro options.
+
 ## 0.5.0-rc.1
 
 - Consolidates the A and B runtimes, the English and Chinese Windows workspace, and shareable JSON profiles.
