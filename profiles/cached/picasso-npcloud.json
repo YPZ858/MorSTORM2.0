@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "input": {
+    "kind": "localizations",
+    "path": "",
+    "format": "picasso",
+    "pixel_size_nm": 103.5,
+    "coordinate_unit": "nm",
+    "frame_base": 1
+  },
+  "drift": {
+    "method": "npcloud",
+    "segment_frames": 100,
+    "pixel_size_nm": 103.5,
+    "parameters": {
+      "npcloud": {
+        "MaxSearchRadius_Pix1": 0.3,
+        "MaxSearchRadius_Pix2": 0.225,
+        "ReSampleFold": 12
+      }
+    },
+    "official": {
+      "root": "../../MorSTORM-dual/third_party",
+      "matlab_executable": "matlab",
+      "timeout_seconds": 3600
+    }
+  },
+  "render": {
+    "pixel_size_nm": 10
+  },
+  "morphology": {
+    "enabled": true,
+    "fiji_dir": "",
+    "sigma_px": 1,
+    "threshold": 0.2,
+    "connectivity": 8,
+    "min_area_nm2": 100
+  },
+  "output_dir": "../../results/cached-picasso-npcloud"
+}

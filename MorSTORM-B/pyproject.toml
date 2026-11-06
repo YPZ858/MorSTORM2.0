@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "morstorm-standalone"
+version = "0.5.0rc1"
+description = "MorSTORM B: standalone Python ports with original-author numerical validation"
+readme = "README.md"
+license = {file = "LICENSE"}
+requires-python = ">=3.10"
+dependencies = ["numpy>=1.23", "scipy>=1.9", "pandas>=1.5", "numba>=0.58", "tifffile>=2023.1", "h5py>=3.8", "PyYAML>=6"]
+
+[project.optional-dependencies]
+picasso = ["picassosr==0.7.4"]
+
+[project.scripts]
+morstorm-b = "morstorm_b.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["python"]
+
+[tool.setuptools.package-data]
+morstorm_b = ["resources/*"]
+"morstorm_b.native" = ["providers.json"]

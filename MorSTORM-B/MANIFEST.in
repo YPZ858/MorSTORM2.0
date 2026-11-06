@@ -1,0 +1,3 @@
+recursive-include shared *.jar *.java *.ijm *.json
+include LICENSE README.md THIRD_PARTY.md
+recursive-include python/morstorm_b/native *.json

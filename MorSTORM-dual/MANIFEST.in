@@ -1,0 +1,6 @@
+include shared/MorstormMorphology.java
+include shared/MorstormThunderstorm.java
+include shared/morstorm-morphology.jar
+include shared/thunderstorm.ijm
+include shared/official_sources.lock.json
+recursive-include matlab *.m

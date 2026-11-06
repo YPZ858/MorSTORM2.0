@@ -1,0 +1,25 @@
+name: Build release artifacts
+on: workflow_dispatch
+permissions:
+  contents: read
+jobs:
+  wheels:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      - run: python scripts/check_public_tree.py
+      - run: python -m pip wheel --no-deps ./MorSTORM-dual ./MorSTORM-B --wheel-dir dist
+      - run: python scripts/check_release_wheels.py dist
+      - run: |
+          cd dist
+          sha256sum *.whl > SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: morstorm-release-candidate
+          path: dist/
+          if-no-files-found: error

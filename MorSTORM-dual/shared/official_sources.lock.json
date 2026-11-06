@@ -1,0 +1,189 @@
+{
+  "schema_version": 1,
+  "sources": {
+    "meanshift": {
+      "revision": "b04d42f0d099cab9b6cd0c184eb0551a41d6664a",
+      "url": "https://github.com/VeatchLab/Mean-Shift-Drift-Correction",
+      "archive_url": "https://codeload.github.com/VeatchLab/Mean-Shift-Drift-Correction/zip/b04d42f0d099cab9b6cd0c184eb0551a41d6664a",
+      "archive_prefix": "Mean-Shift-Drift-Correction-b04d42f0d099cab9b6cd0c184eb0551a41d6664a/",
+      "license": "GPL-3.0",
+      "files": [
+        {
+          "path": "compute_drift_2D.m",
+          "sha256": "f70087513c5c2bcd382259c32d5ac8b55d7097eb130a60055c208f71efcf3137"
+        },
+        {
+          "path": "compute_drift_2D_RCC.m",
+          "sha256": "b8523b168d514306b8fc94d47e65179189c83b4fbc1681bafb32aaeb174f5902"
+        },
+        {
+          "path": "compute_drift_3D.m",
+          "sha256": "46dc850d49f440a2c3345476d8706b5f013616b609eab445e03d0dd2c0d9160b"
+        },
+        {
+          "path": "compute_drift_3D_RCC.m",
+          "sha256": "239ec89c63477267ab98915d28d20c336e0ba12881a27c629fa3b731dd42aa14"
+        },
+        {
+          "path": "crosspairs.m",
+          "sha256": "5b21bfacd2451df9038f78010f6b1ff1bdd60da6684af905bacf9a28d131fcc1"
+        },
+        {
+          "path": "crosspairs_3D.m",
+          "sha256": "5b0a4b98169e894fbdd64a80487265c605c24f7ff7d7710ad382ba5c1a9c2b1d"
+        },
+        {
+          "path": "drift_default_meanshift.m",
+          "sha256": "41acadabb16709fcf2e00b58bf6be34510ef91b19f9e330d8387f4eb2884c90e"
+        },
+        {
+          "path": "example_Bcell.m",
+          "sha256": "43782de2a13cd391be6834cb746e5ccd17dc11e4050082a4b5aee95f9fb8de1c"
+        },
+        {
+          "path": "example_NPC.m",
+          "sha256": "32a3c4e2a496cad441c9f0d3599ef1de2bb906fbe20c3788e364c092e15a82cf"
+        },
+        {
+          "path": "Fcrosspairs.c",
+          "sha256": "d435c0a957d57c8234689c2b4755c578bc8071af9023031074a06fcc23a2893a"
+        },
+        {
+          "path": "Fcrosspairs.mexa64",
+          "sha256": "ac351bed6bbbaf913d7e98cf11ad07f58115c984dd72ffd2bc8643181f4b9917"
+        },
+        {
+          "path": "Fcrosspairs.mexw64",
+          "sha256": "696b75c5f0305afdf7313e2a7ac91b3d13b9c0eb11076dffb3ba10b489694f20"
+        },
+        {
+          "path": "Fcrosspairs_3D.c",
+          "sha256": "7b5b654abf0c068c0ee4fd1824e8f834af98861826bf46479330dd784d4a050a"
+        },
+        {
+          "path": "Fcrosspairs_3D.mexa64",
+          "sha256": "cd017828c78ac052d4cc9fd1353d40cf146f3409f6694996388f2dc6b4b421f1"
+        },
+        {
+          "path": "Fcrosspairs_3D.mexw64",
+          "sha256": "6e11ae28b39205bdb252f63f22c64739a1a682904ef19aa26c10493e45d5b4d1"
+        },
+        {
+          "path": "frcplot.m",
+          "sha256": "7040728fa2ffed08441f90c91d852a8bb88c1b0729e3383d883a9e2c5c17dd6e"
+        },
+        {
+          "path": "gausblur.m",
+          "sha256": "9e8ac7a374263f2583be4070e39cd80ae0785524e3dced2e07bf416768be2306"
+        },
+        {
+          "path": "LICENSE.txt",
+          "sha256": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986"
+        },
+        {
+          "path": "meanshift_2D.m",
+          "sha256": "4513f0f03c82688e1e8d79c8f4292d7a2bd088cda351b19706e1ff3b49b59c53"
+        },
+        {
+          "path": "meanshift_2D_error.m",
+          "sha256": "54d8164dee1eca9b15445bde5e6f490f27718e580cfcbf7d25b643832e828c51"
+        },
+        {
+          "path": "meanshift_3D.m",
+          "sha256": "f465308771679911125c9de0c34c2243c52596f42c2385a728e5c231efac58f0"
+        },
+        {
+          "path": "meanshift_3D_error.m",
+          "sha256": "219412285083f0cdeced5afa63bb5eaa8b3e57ad7812d1a1a8a9767b718bfdac"
+        },
+        {
+          "path": "meanshift_example.m",
+          "sha256": "347b3dde13047ecfed17d5e99d7b0c6c4c6f7b46d32aa7760b3e1222e562a8be"
+        },
+        {
+          "path": "README.md",
+          "sha256": "2b57a6867dfe9c91f5e0ea4347162eee3051a6d8220aafbe95c0f7755ae49a1a"
+        },
+        {
+          "path": "render_Bcell.m",
+          "sha256": "bd20eea18f1b1411a07e8f6d20e53e58622fb8e0da1023baedc1fe254a559509"
+        }
+      ]
+    },
+    "aim": {
+      "revision": "a6e86b58828f8f2b42ec421ef5681d4e7ca9ce3c",
+      "url": "https://github.com/YangLiuLab/AIM",
+      "archive_url": "https://codeload.github.com/YangLiuLab/AIM/zip/a6e86b58828f8f2b42ec421ef5681d4e7ca9ce3c",
+      "archive_prefix": "AIM-a6e86b58828f8f2b42ec421ef5681d4e7ca9ce3c/",
+      "license": "See upstream; no top-level LICENSE in pinned tree",
+      "files": [
+        {
+          "path": "AIM/AIM.m",
+          "sha256": "e865191cfa34e2ce6f864df995df4b171b6bba61f17a105fb1af17091cd1edb0"
+        },
+        {
+          "path": "AIM/IntersectionMax.m",
+          "sha256": "06f80bf314d697b2289071f0fc3745e33e6a41e9ee50d685225fe8cf8dd5d507"
+        },
+        {
+          "path": "AIM/IntersectionMaxZ.m",
+          "sha256": "f6b618dbe6083a9b51d61672df68f88987e6e3a70f55ea9fb26b0676a3b7eddf"
+        },
+        {
+          "path": "AIM/PointIntersect1D.mexw64",
+          "sha256": "a13251004202b02a1931670d3bc170439d082a7e37df8c88e4b5ceee68d8af97"
+        },
+        {
+          "path": "AIM/PointIntersect2D.mexw64",
+          "sha256": "31f8b68a7736128ed1c13a802d50010dd928780d530b0dbf387fa05f286c2102"
+        },
+        {
+          "path": "README.md",
+          "sha256": "263a5da7b939c42a59e92db507f1332d801d32dcc9cf527a07ee00212203bfd2"
+        }
+      ]
+    },
+    "npcloud": {
+      "revision": "zenodo:16513620",
+      "url": "https://doi.org/10.5281/zenodo.16513620",
+      "archive_url": "https://zenodo.org/api/records/16513620/files/NPCloud_Code_Data.zip/content",
+      "archive_prefix": "NPCloud_Code_Data/",
+      "archive_md5": "0bacb6e81608f5ecd5b422358d743961",
+      "license": "CC-BY-NC-4.0",
+      "files": [
+        {
+          "path": "Codes_2D/NP_Cloud_NoSort.m",
+          "sha256": "90667a84f77d1e681afe234e74db2f5d64b67abb70e7f0633ad08d466290bd9b"
+        },
+        {
+          "path": "Codes_2D/NPC_RRNPC_CallFunction.m",
+          "sha256": "bcce1b57faa46db6288e44b82bc0367ab3d6cbfd0340437dd064a9120f5359b3"
+        },
+        {
+          "path": "Codes_2D/Run_NPC_RRNPC.m",
+          "sha256": "72a1d8d5d3120641bd979e26c636ffd87b796a6a397167f56b54a155bdda55ee"
+        },
+        {
+          "path": "Codes_3D/NP_Cloud_NoSort_3D_Pass1.m",
+          "sha256": "87f3a0dcfe448858c27f73defb7740260c2f16e4bfd375f5674fb7ba50b502aa"
+        },
+        {
+          "path": "Codes_3D/NP_Cloud_NoSort_3D_Pass2.m",
+          "sha256": "a23a85c561ce3435721ad962bd617ced3359ae1d2a7fd896b362fc833e3b2757"
+        },
+        {
+          "path": "Codes_3D/NPC_RRNPC_3D_CallFunction.m",
+          "sha256": "9b3b2d466286e95d6aed4c739fba9836f8080e390c23c07db9d0e9e1f6e20971"
+        },
+        {
+          "path": "Codes_3D/Run_NPC_RRNPC_3D.m",
+          "sha256": "0d316dc114e8cc68b28ba38f34a0b91814a42f933920a5af1dd38cd38e620866"
+        },
+        {
+          "path": "ReadMe.txt",
+          "sha256": "e8267bb2b979124e91b1fe36b25b26bc84b25147db1088ad3230718e336cf684"
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,192 @@
+{
+  "oracle": "MorSTORM A v0.3.0, MATLAB R2021a on Windows x64; pinned original code and MEX",
+  "revisions": {
+    "meanshift": "b04d42f0d099cab9b6cd0c184eb0551a41d6664a",
+    "aim": "a6e86b58828f8f2b42ec421ef5681d4e7ca9ce3c",
+    "npcloud": "zenodo:16513620"
+  },
+  "cases": [
+    {
+      "name": "baseline_2d",
+      "dimensions": 2,
+      "file": "baseline_2d.npz",
+      "sha256": "aa472b6534c171ebc3f1321d3b7f9b941b11632b41da5051fdbf462690a1395f",
+      "source": "MorSTORM A v0.3.0 validation/author-parity",
+      "config": {
+        "segment_frames": 10,
+        "pixel_size_nm": 160,
+        "parameters": {
+          "meanshift": {
+            "nTimeBin": 8
+          }
+        }
+      },
+      "expected_rejections": []
+    },
+    {
+      "name": "baseline_3d",
+      "dimensions": 3,
+      "file": "baseline_3d.npz",
+      "sha256": "99bbb18eea7a88f91913167a87dad1ce313e2da8d3af629f30b14fb8fcafd7fd",
+      "source": "MorSTORM A v0.3.0 validation/author-parity",
+      "config": {
+        "segment_frames": 10,
+        "pixel_size_nm": 160,
+        "parameters": {
+          "meanshift": {
+            "nTimeBin": 8
+          }
+        }
+      },
+      "expected_rejections": []
+    },
+    {
+      "name": "nonlinear_2d",
+      "dimensions": 2,
+      "file": "nonlinear_2d.npz",
+      "sha256": "a49849a0229140f3374610974542582dde763d3bb7ffe71f35ea02c47eda29ef",
+      "source": "MorSTORM synthetic fixture (seeded Gaussian noise); A original-author curve",
+      "config": {
+        "segment_frames": 10,
+        "pixel_size_nm": 160,
+        "parameters": {
+          "meanshift": {
+            "nTimeBin": 6,
+            "outlier_error": 50
+          }
+        }
+      },
+      "expected_rejections": []
+    },
+    {
+      "name": "nonlinear_3d",
+      "dimensions": 3,
+      "file": "nonlinear_3d.npz",
+      "sha256": "ad5d3ea1e3bec319ab7986527c370e24a034950572910354016ccdba51dab6a6",
+      "source": "MorSTORM synthetic fixture (seeded Gaussian noise); A original-author curve",
+      "config": {
+        "segment_frames": 10,
+        "pixel_size_nm": 160,
+        "parameters": {
+          "meanshift": {
+            "nTimeBin": 6,
+            "outlier_error": 50
+          }
+        }
+      },
+      "expected_rejections": []
+    },
+    {
+      "name": "background_2d",
+      "dimensions": 2,
+      "file": "background_2d.npz",
+      "sha256": "cdd158c9078817941a81daba7df3a416bb41d8bcb15038ce874f2d47aafa3b3c",
+      "source": "MorSTORM synthetic fixture (seeded Gaussian noise); A original-author curve",
+      "config": {
+        "segment_frames": 10,
+        "pixel_size_nm": 160,
+        "parameters": {
+          "meanshift": {
+            "nTimeBin": 6,
+            "outlier_error": 50
+          }
+        }
+      },
+      "expected_rejections": []
+    },
+    {
+      "name": "background_3d",
+      "dimensions": 3,
+      "file": "background_3d.npz",
+      "sha256": "81158af5125ddca464d1f06475c9ed136b502d43d0493342bf6d6de54fff4029",
+      "source": "MorSTORM synthetic fixture (seeded Gaussian noise); A original-author curve",
+      "config": {
+        "segment_frames": 10,
+        "pixel_size_nm": 160,
+        "parameters": {
+          "meanshift": {
+            "nTimeBin": 6,
+            "outlier_error": 50
+          }
+        }
+      },
+      "expected_rejections": []
+    },
+    {
+      "name": "quantized_2d",
+      "dimensions": 2,
+      "file": "quantized_2d.npz",
+      "sha256": "fc7c520b06f44796a913fb1610c2d70bf185526a2d673e9c05df7b335e796748",
+      "source": "MorSTORM synthetic fixture (seeded Gaussian noise); A original-author curve",
+      "config": {
+        "segment_frames": 10,
+        "pixel_size_nm": 160,
+        "parameters": {
+          "meanshift": {
+            "nTimeBin": 8,
+            "outlier_error": 50
+          }
+        }
+      },
+      "expected_rejections": []
+    },
+    {
+      "name": "quantized_3d",
+      "dimensions": 3,
+      "file": "quantized_3d.npz",
+      "sha256": "10ac450fcc7fab91bcf7bbcc5d37633a848db0daebfa229c27473adc7372a3b3",
+      "source": "MorSTORM synthetic fixture (seeded Gaussian noise); A original-author curve",
+      "config": {
+        "segment_frames": 10,
+        "pixel_size_nm": 160,
+        "parameters": {
+          "meanshift": {
+            "nTimeBin": 8,
+            "outlier_error": 50
+          }
+        }
+      },
+      "expected_rejections": []
+    },
+    {
+      "name": "outliers_2d",
+      "dimensions": 2,
+      "file": "outliers_2d.npz",
+      "sha256": "344b0d7d1591f9762d4775982fbb1a022bdce3c645f5e29d618b90b2168dc956",
+      "source": "MorSTORM synthetic fixture (seeded Gaussian noise); A original-author curve",
+      "config": {
+        "segment_frames": 10,
+        "pixel_size_nm": 160,
+        "parameters": {
+          "meanshift": {
+            "nTimeBin": 6,
+            "outlier_error": 0.2
+          }
+        }
+      },
+      "expected_rejections": [
+        "meanshift"
+      ]
+    },
+    {
+      "name": "outliers_3d",
+      "dimensions": 3,
+      "file": "outliers_3d.npz",
+      "sha256": "b1fdddfd562a29a1095ffe1ddef6de185978772deaf0bffa3590fdcf1db02302",
+      "source": "MorSTORM synthetic fixture (seeded Gaussian noise); A original-author curve",
+      "config": {
+        "segment_frames": 10,
+        "pixel_size_nm": 160,
+        "parameters": {
+          "meanshift": {
+            "nTimeBin": 6,
+            "outlier_error": 0.2
+          }
+        }
+      },
+      "expected_rejections": [
+        "meanshift"
+      ]
+    }
+  ]
+}

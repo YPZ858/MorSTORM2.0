@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "input": {
+    "kind": "localizations",
+    "path": "demo_thunderstorm.csv",
+    "format": "thunderstorm",
+    "coordinate_unit": "nm",
+    "frame_base": 1,
+    "pixel_size_nm": 160
+  },
+  "drift": {
+    "method": "meanshift",
+    "segment_frames": 10,
+    "parameters": {
+      "meanshift": {
+        "nTimeBin": 8
+      }
+    },
+    "official": {
+      "root": "../third_party",
+      "matlab_executable": "matlab",
+      "timeout_seconds": 600
+    }
+  },
+  "render": {
+    "pixel_size_nm": 10,
+    "max_pixels": 100000000
+  },
+  "morphology": {
+    "enabled": false
+  },
+  "output_dir": "../../results/a-demo"
+}

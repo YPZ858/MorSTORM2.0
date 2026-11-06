@@ -1,0 +1,50 @@
+{
+  "schema_version": 1,
+  "input": {
+    "kind": "movie",
+    "path": "",
+    "pixel_size_nm": 103.5
+  },
+  "drift": {
+    "method": "rrnpcloud",
+    "segment_frames": 100,
+    "pixel_size_nm": 103.5,
+    "parameters": {
+      "npcloud": {
+        "MaxSearchRadius_Pix1": 0.3,
+        "MaxSearchRadius_Pix2": 0.225,
+        "ReSampleFold": 12
+      }
+    },
+    "official": {
+      "root": "../../MorSTORM-dual/third_party",
+      "matlab_executable": "matlab",
+      "timeout_seconds": 3600
+    }
+  },
+  "render": {
+    "pixel_size_nm": 10
+  },
+  "morphology": {
+    "enabled": true,
+    "fiji_dir": "",
+    "sigma_px": 1,
+    "threshold": 0.2,
+    "connectivity": 8,
+    "min_area_nm2": 100
+  },
+  "localization": {
+    "backend": "picasso",
+    "pixel_size_nm": 103.5,
+    "camera": {
+      "baseline": 100.0,
+      "sensitivity": 1,
+      "gain": 1
+    },
+    "box_size": 7,
+    "min_net_gradient": 20000.0,
+    "timeout_seconds": 5400,
+    "python_executable": "python"
+  },
+  "output_dir": "../../results/raw-picasso-rrnpcloud"
+}

@@ -1,0 +1,9 @@
+# Constraints for the Windows x64, Python 3.10.16 author comparison.
+numpy==1.24.3
+scipy==1.11.2
+numba==0.58.0
+pandas==2.1.1
+tifffile==2025.1.10
+h5py==3.12.1
+PyYAML==6.0.1
+picassosr==0.7.4
