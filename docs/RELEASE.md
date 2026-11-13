@@ -1,6 +1,6 @@
 # GitHub release review
 
-Candidate tag `v0.6.0-rc.1`. Both Python distributions use the PEP 440 version `0.6.0rc1`.
+Candidate tag `v0.6.0-rc.2`. Both Python distributions use the PEP 440 version `0.6.0rc2`.
 
 1. Confirm the repository owner and release destination. Use the original project only if its maintainer wants this as an extension release, or create a separately attributed repository.
 2. Review `LICENSE` and `THIRD_PARTY.md`. GPL-3.0-or-later is the proposed license for code contributed to this candidate, compatible with the shipped MeanShift adaptation. Confirm that the rightsholders of the newly authored integration approve the grant before a public push. Keep unpublished acquisition material and optional local B providers out of the public tree.

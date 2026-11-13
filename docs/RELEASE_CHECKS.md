@@ -1,5 +1,22 @@
 # Release candidate checks
 
+## 0.6.0-rc.2
+
+On Windows, all 33 unit and integration tests passed, including real ThunderSTORM, Picasso, and MorphoLibJ calls. Both desktop languages were checked for Fiji path persistence, crop presets across A/B, direct CSV or HDF5 import and reconstruction, the last-used parameter prompt, and cancellation during localization through Stop or Exit.
+
+The original 561-channel stack from the earlier audit was cropped from 512 × 512 to 256 × 256 pixels and retained all 6,000 frames. Six GUI-runner workflows completed through fitting, drift correction, native post-fitting, ThunderSTORM reconstruction, and MorphoLibJ. The batch-mode run used B Python and ThunderSTORM. Fitted coordinates were restored to the original image origin, and sampled frame pixels matched the source region.
+
+| Fitter | Runtime | Drift method | Fitted rows | Post-fitting rows | Regions |
+| --- | --- | --- | ---: | ---: | ---: |
+| ThunderSTORM | A MATLAB | MeanShift | 3,466 | 695 | 48 |
+| ThunderSTORM | A Python | NP-Cloud | 3,466 | 696 | 54 |
+| ThunderSTORM | B Python | RR-NP Cloud | 3,466 | 698 | 57 |
+| Picasso | A MATLAB, A Python, B Python | AIM | 72,244 each | 66,917 each | 2,775 each |
+
+The ThunderSTORM crop had detections through frame 5,978. The drift output covered frames 1–5,978. Picasso had detections through frame 6,000. The full-field NP-Cloud radii (0.45 and 0.3375 camera pixels) produced an empty cloud in the cropped ThunderSTORM data. The two cloud methods completed with radii of 1.25 and 0.9375 camera pixels and the original 600-frame segments. The published audit presets retain their full-field values.
+
+On identical fitted input for each comparison, the maximum absolute A/B drift errors were 2.67e-15 nm (MeanShift), 1.14e-13 nm (NP-Cloud), 3.09e-6 nm (RR-NP Cloud), and 4.99e-9 nm (AIM, across both A entry points). The AIM reconstruction TIFFs, label images, and assignments matched across all three runtimes. The acquisition and its derived outputs are kept locally.
+
 ## 0.6.0-rc.1
 
 On Windows, all 30 unit and integration tests passed. The preset tests covered all 16 audit templates, a custom macro expression, engine-independent job settings, and rejection of changes to fixed AIM settings. The English and Chinese desktops were exercised through all seven panels, including an edit, save, restore, import, and engine switch.

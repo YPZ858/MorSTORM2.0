@@ -15,6 +15,10 @@ public final class MorstormThunderstorm {
                     new String(Base64.getDecoder().decode(args[2]),StandardCharsets.UTF_8)};
             if (args.length != 2) throw new IllegalArgumentException("macro_path settings_path");
             new ImageJ(ImageJ.NO_SHOW);
+            IJ.setExceptionHandler(error -> {
+                error.printStackTrace(System.err);
+                System.exit(1);
+            });
             IJ.runMacroFile(args[0], args[1]);
             System.exit(0);
         } catch (Throwable e) { e.printStackTrace(System.err); System.exit(1); }

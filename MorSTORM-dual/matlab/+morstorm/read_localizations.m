@@ -42,6 +42,10 @@ else
         pixel=morstorm.option(cfg,'pixel_size_nm',[]);
         assert(isscalar(pixel)&&isfinite(pixel)&&pixel>0,'Explicit positive pixel_size_nm required');
         t{:,axes}=double(t{:,axes})*pixel;
+    elseif morstorm.option(cfg,'xy_in_pixels',false)
+        pixel=morstorm.option(cfg,'pixel_size_nm',[]);
+        assert(isscalar(pixel)&&isfinite(pixel)&&pixel>0,'Explicit positive pixel_size_nm required');
+        t{:,{'x_nm','y_nm'}}=double(t{:,{'x_nm','y_nm'}})*pixel;
     end
     base=morstorm.option(cfg,'frame_base',1); assert(any(base==[0,1]),'frame_base must be 0 or 1');
     t.frame=double(t.frame)+1-base;

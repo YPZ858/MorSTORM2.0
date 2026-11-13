@@ -5,6 +5,7 @@ import json
 import re
 
 import runner
+import raw_crop
 
 
 @dataclass(frozen=True)
@@ -22,7 +23,8 @@ class Field:
 
 
 CHOICES = {'bool': ('false', 'true'), 'flag': ('0', '1'), 'fit': ('sigma', 'sigmaxy'),
-           'interp': ('linear', 'nearest', 'pchip', 'spline'), 'connect': ('4', '8')}
+           'interp': ('linear', 'nearest', 'pchip', 'spline'), 'connect': ('4', '8'),
+           'dimensions': ('2D', '3D'), 'renderer': ('Histograms', 'Averaged shifted histograms')}
 PIXEL = Field('camera_pixel', 'Camera pixel size', '相机像素大小', 'nm/px')
 SEGMENT = Field('segment_frames', 'Frames per segment', '每段帧数', 'frames / 帧', 'int')
 RENDER = Field('render_pixel', 'Render pixel size', '渲染像素大小', 'nm/px')
@@ -95,10 +97,42 @@ MORPHOLOGY = (
     Field('min_area_nm2', 'Minimum object area', '最小对象面积', 'nm²', 'nonnegative'),
     Field('exclude_border', 'Exclude border objects', '排除接触边缘的对象', kind='bool'),
 )
+TS_POSTFIT = (
+    Field('formula', 'Filter expression', '质量过滤表达式', kind='text', optional=True),
+    Field('duplicates', 'Remove same-frame duplicates', '移除同帧重复点', kind='bool'),
+    Field('duplicate_nm', 'Duplicate radius', '重复点半径', 'nm'),
+    Field('density', 'Local density filter', '局部密度过滤', kind='bool'),
+    Field('density_nm', 'Density radius', '密度搜索半径', 'nm'),
+    Field('dimensions', 'Density dimensions', '密度计算维度', kind='dimensions'),
+    Field('neighbors', 'Minimum neighbors', '最少邻居数', 'points / 点', 'int'),
+    Field('merge', 'Merge across frames', '跨帧合并', kind='bool'),
+    Field('merge_nm', 'Merge distance', '合并距离', 'nm'),
+    Field('dark_frames', 'Maximum off frames', '最大熄灭帧数', 'frames / 帧', 'count'),
+    Field('max_frames', 'Maximum frames per molecule (0 = unlimited)', '每分子最大帧数（0 为不限）', 'frames / 帧', 'count'),
+    Field('z_weight', 'Merge Z weight', '合并 Z 权重', kind='nonnegative'),
+)
+PICASSO_POSTFIT = (
+    Field('min_photons', 'Minimum photons', '最小光子数', 'photons / 光子', 'nonnegative', True),
+    Field('max_precision_nm', 'Maximum XY uncertainty', '最大 XY 定位不确定度', 'nm', optional=True),
+    Field('link', 'Picasso Link', 'Picasso Link 跨帧连接', kind='bool'),
+    Field('link_nm', 'Link distance', '连接距离', 'nm'),
+    Field('dark_frames', 'Maximum dark time', '最大暗帧数', 'frames / 帧', 'count'),
+)
+RECONSTRUCTION = (
+    Field('pixel_size_nm', 'Reconstruction pixel size', '重建像素大小', 'nm/px'),
+    Field('renderer', 'ThunderSTORM renderer', 'ThunderSTORM 渲染器', kind='renderer'),
+    Field('averages', 'ASH shifts per axis', '每轴 ASH 平移次数', kind='int'),
+)
+STAGE_DEFAULTS = {
+    'ThunderSTORM postfit': dict(zip((f.key for f in TS_POSTFIT), ('', False, 30, False, 100, '2D', 2, False, 20, 1, 0, .1))),
+    'Picasso postfit': {'min_photons': None, 'max_precision_nm': None, 'link': False, 'link_nm': 20, 'dark_frames': 1},
+    'reconstruction': {'pixel_size_nm': 10, 'renderer': 'Histograms', 'averages': 2},
+}
 FIELDS = {'Picasso': (PIXEL, *PICASSO_CAMERA, *PICASSO_FIT),
           'ThunderSTORM': (PIXEL, *TS_CAMERA, *TS_ANALYSIS, *TS_EXTRAS),
           'meanshift': MEANSHIFT, 'npcloud': NPCLOUD, 'rrnpcloud': NPCLOUD,
-          'aim': (SEGMENT,), 'morphology': MORPHOLOGY}
+          'aim': (SEGMENT,), 'morphology': MORPHOLOGY, 'ThunderSTORM postfit': TS_POSTFIT,
+          'Picasso postfit': PICASSO_POSTFIT, 'reconstruction': RECONSTRUCTION}
 
 FIXED = {
     'Picasso': ('Fixed: upstream 2D MLE and Qe = 1 (metadata only).', '固定：原版 2D MLE，Qe = 1（仅元数据）。'),
@@ -113,6 +147,12 @@ FIXED = {
             '固定：相交距离 20 nm，局部搜索半径 60 nm。最后一个定位帧的帧号须能分成至少两个完整段。'),
     'morphology': ('Fixed: XY density projection, Gaussian smoothing, then connected components in MorphoLibJ.',
                    '固定：在 XY 平面渲染密度，经高斯平滑后使用 MorphoLibJ 识别连通对象。'),
+    'ThunderSTORM postfit': ('Native ThunderSTORM. Order: quality filter, duplicates, density, merge. Blank formula skips quality filtering.',
+                            '调用原版 ThunderSTORM，依次进行质量过滤、去重、密度过滤和合并。表达式留空时跳过质量过滤。'),
+    'Picasso postfit': ('Filters use the fitted photons and XY precision. Link uses native Picasso. Blank bounds skip the corresponding filter.',
+                        '按拟合光子数和 XY 精度过滤。跨帧连接调用原版 Picasso Link。过滤阈值可留空。'),
+    'reconstruction': ('Native ThunderSTORM 2D rendering. ASH shifts apply to Averaged shifted histograms.',
+                       '调用原版 ThunderSTORM 进行二维重建。平移次数仅用于平均平移直方图。'),
 }
 
 MACRO_TOKEN = re.compile(r'([\w.-]+)(?:=(?:\[([^\[\]\r\n]*)\]|([^\s\[\]]+)))?(?=\s|$)')
@@ -169,9 +209,9 @@ def parse_field(field, value):
         if not text or '\n' in text or '\r' in text:
             raise ValueError(f'{field.en}: enter a single line.')
         return text
-    value = runner.number(text, field.en, integer=field.kind in ('int', 'bins', 'odd'),
+    value = runner.number(text, field.en, integer=field.kind in ('int', 'bins', 'odd', 'count'),
                           minimum={'bins': 2, 'odd': 3}.get(field.kind, 0),
-                          inclusive=field.kind in ('nonnegative', 'bins', 'odd', 'fraction'))
+                          inclusive=field.kind in ('nonnegative', 'bins', 'odd', 'fraction', 'count'))
     if field.kind == 'odd' and value % 2 == 0:
         raise ValueError('The Picasso fitting box side must be odd.')
     if field.kind == 'fraction' and value > 1:
@@ -194,6 +234,9 @@ def fields_from_macros(localization):
 
 
 def values(config, panel):
+    if panel in STAGE_DEFAULTS:
+        key = 'reconstruction' if panel == 'reconstruction' else 'postfit'
+        return {**STAGE_DEFAULTS[panel], **config.get(key, {})}
     if panel == 'Picasso':
         loc = config['localization']
         return {'camera_pixel': config['input']['pixel_size_nm'], **loc['camera'],
@@ -214,7 +257,12 @@ def values(config, panel):
 
 def set_values(config, panel, incoming):
     parsed = {field.key: parse_field(field, incoming.get(field.key)) for field in FIELDS[panel]}
-    if panel in runner.BACKENDS:
+    if panel in STAGE_DEFAULTS:
+        if panel == 'ThunderSTORM postfit' and any(c in (parsed['formula'] or '') for c in '[]'):
+            raise ValueError('A ThunderSTORM filter expression cannot contain square brackets.')
+        key = 'reconstruction' if panel == 'reconstruction' else 'postfit'
+        config[key] = parsed
+    elif panel in runner.BACKENDS:
         config['input']['pixel_size_nm'] = parsed.pop('camera_pixel')
         loc = config['localization']
         if panel == 'Picasso':
@@ -244,8 +292,13 @@ def section_key(panel, backend):
 
 
 def export_preset(profile, modules, pixel, period, render):
-    all_stages = runner.MODULES if profile.mode == 'raw' else runner.MODULES[1:]
+    all_stages = runner.DEFAULT_MODULES if profile.mode == 'raw' else runner.DEFAULT_MODULES[1:]
     config = runner.configured_profile(profile, all_stages, pixel, period, None, render)
+    return portable_preset(config, modules)
+
+
+def portable_preset(config, modules):
+    config = deepcopy(config)
     config['modules'] = list(modules)
     config['input']['path'] = ''
     config['output_dir'] = 'results/morstorm-preset'
@@ -253,8 +306,11 @@ def export_preset(profile, modules, pixel, period, render):
     config['morphology']['enabled'] = 'morphology' in modules
     config['morphology'].pop('fiji_dir', None)
     config.pop('local_b_provider_dir', None)
-    if profile.mode == 'raw':
-        for key in ('fiji_dir', 'python_executable'):
+    config.pop('table_python', None)
+    config.pop('execution_engine', None)
+    config.pop('crop_applied', None)
+    if 'localization' in config:
+        for key in ('fiji_dir', 'python_executable', 'java_executable'):
             config['localization'].pop(key, None)
     return config
 
@@ -274,7 +330,8 @@ def import_preset(path, backend_hint):
         backend = next((item for item in runner.BACKENDS if item.lower() == backend.lower()), None)
         profile = runner.load_profile(mode, backend, method)
         stages = runner.MODULES if mode == 'raw' else runner.MODULES[1:]
-        legacy_stages = [stage for stage in stages if stage != 'morphology' or config.get('morphology', {}).get('enabled', True)]
+        legacy_stages = [stage for stage in stages if stage in runner.DEFAULT_MODULES
+                         and (stage != 'morphology' or config.get('morphology', {}).get('enabled', True))]
         selected = config.get('modules', legacy_stages)
         if not isinstance(selected, list) or not selected or any(stage not in stages for stage in selected):
             raise ValueError('The preset stages do not match its input type.')
@@ -282,7 +339,7 @@ def import_preset(path, backend_hint):
             raise ValueError('The preset stages do not match its input type.')
         incoming = deepcopy(profile.config)
         incoming['input'].update(inp)
-        for key in ('localization', 'render', 'morphology'):
+        for key in ('localization', 'render', 'morphology', 'postfit', 'reconstruction'):
             if key in config:
                 incoming.setdefault(key, {}).update(config[key])
         source_drift = config['drift']
@@ -311,8 +368,15 @@ def import_preset(path, backend_hint):
         panels = (backend, method, 'morphology') if mode == 'raw' else (method, 'morphology')
         resolved = deepcopy(profile.config)
         resolved['input']['pixel_size_nm'] = runner.number(incoming['input']['pixel_size_nm'], 'Camera pixel size')
+        if mode == 'raw':
+            crop = raw_crop.validate(config.get('raw_crop'))
+            if crop:
+                resolved['raw_crop'] = crop
         for panel in panels:
             set_values(resolved, panel, values(incoming, panel))
+        for key, panel in (('postfit', f'{backend} postfit'), ('reconstruction', 'reconstruction')):
+            if key in config:
+                set_values(resolved, panel, values(incoming, panel))
     except (KeyError, TypeError, AttributeError) as error:
         raise ValueError('The file is missing a required MorSTORM preset field or has an invalid value.') from error
     return replace(profile, config=resolved), tuple(stage for stage in stages if stage in selected)

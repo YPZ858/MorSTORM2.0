@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.0-rc.2
+
+- Adds percentage-based XY cropping for raw TIFF images and stacks in single-file and folder mode. The same region applies to every frame, and localization coordinates use the original image origin. The result includes the cropped TIFF and the applied bounds.
+- Adds an explicit localization-table import and native ThunderSTORM reconstruction. Localization, drift, post-fitting, reconstruction, and MorphoLibJ can run independently or in an ordered workflow.
+- Adds native ThunderSTORM filtering, duplicate removal, density filtering, and merge. The Picasso panel exposes photon and precision filters and native Link.
+- Adds a persistent Fiji path, Stop, Stop and exit, and an opt-in last-used parameter preset to the English and Chinese workspaces.
+
 ## 0.6.0-rc.1
 
 - Adds bilingual parameter panels for Picasso, ThunderSTORM, MeanShift, NP-Cloud, RR-NP Cloud, AIM, and MorphoLibJ. Each panel shows units, active values, audited defaults, and fixed settings.

@@ -6,7 +6,7 @@ from zipfile import ZipFile
 
 
 def main(directory):
-    wheels = sorted(Path(directory).glob('morstorm*-0.6.0rc1-*.whl'))
+    wheels = sorted(Path(directory).glob('morstorm*-0.6.0rc2-*.whl'))
     assert len(wheels)==2, wheels
     for path in wheels:
         package = 'morstorm_b' if path.name.startswith('morstorm_standalone-') else 'morstorm'

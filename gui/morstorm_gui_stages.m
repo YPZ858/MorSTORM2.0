@@ -9,7 +9,12 @@ for k = 1:numel(cfg.modules)
     module = cfg.modules{k};
     fprintf('::morstorm-stage::%s\n', module);
     if strcmp(module, 'localize')
+        if isfield(cfg, 'crop_applied'), inp.path = cfg.crop_applied.working_tiff; end
         localized = morstorm.localize(inp, cfg.localization, folder);
+        if isfield(cfg, 'crop_applied')
+            morstorm.process({cfg.table_python,fullfile(fileparts(mfilename('fullpath')),'raw_crop.py'), ...
+                path,localized.path},fullfile(folder,'crop-coordinates.log'),600);
+        end
         fields = fieldnames(localized);
         for i = 1:numel(fields)
             name = fields{i};
@@ -17,6 +22,16 @@ for k = 1:numel(cfg.modules)
         end
         [~,name,extension] = fileparts(inp.path);
         result.localization = struct('backend',cfg.localization.backend,'output',[name extension]);
+    end
+    if any(strcmp(module, {'postfit','reconstruct'}))
+        inputFile = fullfile(folder,[module '-source.json']);
+        save_json(inputFile,inp);
+        morstorm.process({cfg.table_python,fullfile(fileparts(mfilename('fullpath')),'table_stages.py'), ...
+            module,inputFile,path,folder},fullfile(folder,[module '-worker.log']),3700);
+        stage = jsondecode(fileread(fullfile(folder,[module '-result.json'])));
+        inp = stage.input;
+        result.(module) = stage.metadata;
+        if strcmp(module, 'postfit'), loaded = false; end
     end
     if ~loaded
         [t, metadata] = morstorm.read_localizations(inp.path, inp);
@@ -32,6 +47,11 @@ for k = 1:numel(cfg.modules)
         writetable(thunder, fullfile(folder,'thunderstorm.csv'));
         if strcmp(metadata.format,'picasso')
             morstorm.write_picasso(t,metadata,folder);
+            inp = struct('path',fullfile(folder,'picasso_corrected.hdf5'),'format','picasso', ...
+                'pixel_size_nm',cfg.drift.pixel_size_nm);
+        else
+            inp = struct('path',fullfile(folder,'corrected.csv'),'format','csv', ...
+                'pixel_size_nm',cfg.drift.pixel_size_nm);
         end
         drift = array2table([(1:size(curve,1))',curve], 'VariableNames',[{'frame'},strcat('d',axes)]);
         writetable(drift,fullfile(folder,'drift.csv'));

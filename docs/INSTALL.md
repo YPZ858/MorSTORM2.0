@@ -19,7 +19,7 @@ To localize raw TIFF with Picasso, install the matching optional dependency. Alr
 
 ## Configure Fiji and A
 
-Install [Fiji](https://fiji.sc/) and enable the MorphoLibJ update site or install its plugin JAR. Install the [ThunderSTORM plugin](https://github.com/zitmen/thunderstorm) in the Fiji `plugins/` directory if using that localizer. Configure the paths from the repository root.
+Install [Fiji](https://fiji.sc/) and enable the MorphoLibJ update site or install its plugin JAR. Install the [ThunderSTORM plugin](https://github.com/zitmen/thunderstorm) in the Fiji `plugins/` directory for ThunderSTORM fitting, post-fitting, or reconstruction. Enter or browse to the Fiji application folder at the top of the workspace. The workspace saves the path when you leave the field or press Enter. You can also configure the paths from the repository root.
 
 ```powershell
 .\.venv\Scripts\python.exe scripts/configure.py --fiji 'C:/path/to/Fiji.app'
@@ -33,6 +33,14 @@ A's author installer contacts the upstream GitHub and Zenodo archives and checks
 ## Start the desktop workspace
 
 Double-click `Start-English.cmd` or `Start-Chinese.cmd`, or run `python gui/app.py --lang en` from the configured environment. Select variant A or B at the top. Choose localization to start with a single-channel TIFF stack. With localization unchecked, select a table for drift and/or morphology. File folders are scanned at one level. Picasso multipart stacks should be exported as one stack per acquisition before using folder mode.
+
+Use **Import localizations…** to select a ThunderSTORM CSV or a Picasso HDF5 and enable **ThunderSTORM reconstruction**. Enter the camera pixel size and set the reconstruction pixel size in its **Advanced…** panel. The original plugin writes `thunderstorm-reconstruction.tif`. The manifest records the XY origin in nm. For ThunderSTORM CSV with `x [px]` and `y [px]`, the camera pixel size converts XY to nm. A Z column labeled in nm retains its scale.
+
+With **Fit TIFF movie** enabled, use **Crop by percentage…** beside the input field to keep a centered 75%, 50%, or 25% of the width and height, or enter custom XY edges as percentages from the top-left corner. The crop applies to every frame. Folder mode calculates the pixel bounds from each file’s dimensions. The result folder contains `raw-cropped.tif`, and the manifest records the requested percentages and the actual pixel bounds. Localization tables use the original image’s XY origin. Presets save the percentages for reuse. The cropped stack must fit within the standard TIFF size limit of about 4 GiB.
+
+The workflow runs TIFF fitting, drift correction, post-fitting, ThunderSTORM reconstruction, then MorphoLibJ. With TIFF fitting off, **Table backend** chooses the backend for **Post-fitting**. ThunderSTORM offers a quality expression, same-frame duplicate removal, local density filtering, and merging. To recalculate uncertainty during Merge, the imported fitting table needs sigma, intensity in photons, and `bkgstd` in photons. New ThunderSTORM fits export these fields. Picasso post-fitting accepts the HDF5 and its matching YAML, filters by photons and XY uncertainty, and offers the original Picasso Link. Enable each desired operation in the **Advanced…** panel. Output tables use `postfit.csv` or `postfit.hdf5` plus `postfit.yaml`.
+
+Use **Stop** to cancel an active job. The batch report records completed, failed, cancelled, and unstarted files. **Exit** offers to stop an active job before closing. After a batch with a completed file, choose whether to save its parameters. **Load last parameters** reopens the saved preset, including stage selections and algorithm settings.
 
 Use **Advanced…** beside an enabled stage to open the panel for the selected algorithm. The **Audit default** column shows the preset used in the original validation and the adapter defaults for options omitted by that preset. The note above the table describes fixed settings. In ThunderSTORM, named controls are passed as ImageJ macro options. Use the additional options fields for other filter or fitter settings from your plugin. Leave an optional field blank to omit it.
 

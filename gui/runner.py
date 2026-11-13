@@ -1,5 +1,6 @@
 """Prepare a GUI job and dispatch it to an existing MorSTORM entry point."""
 from copy import deepcopy
+import csv
 from dataclasses import dataclass
 from datetime import datetime
 from hashlib import sha256
@@ -9,9 +10,12 @@ import os
 from pathlib import Path
 import re
 import shutil
-import subprocess
 import sys
+from threading import Event, Thread
 from uuid import uuid4
+
+from process_tree import worker_process
+import raw_crop
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -43,16 +47,36 @@ class Profile:
 
 
 def local_settings():
-    path = Path(os.environ.get('MORSTORM_SETTINGS', ROOT/'settings.local.json')).expanduser().resolve()
-    settings = json.loads(path.read_text(encoding='utf-8-sig')) if path.is_file() else {}
+    path = settings_path()
+    settings = read_settings(path)
     for key, variable in (('fiji_dir','MORSTORM_FIJI'),('matlab_executable','MORSTORM_MATLAB'),
                           ('author_root','MORSTORM_THIRD_PARTY'),('b_providers','MORSTORM_B_LOCAL_PROVIDERS')):
-        if os.environ.get(variable):
+        if os.environ.get(variable) and (key != 'fiji_dir' or key not in settings):
             settings[key] = os.environ[variable]
     for key in ('fiji_dir','matlab_executable','author_root','b_providers','python_executable'):
         if settings.get(key):
             settings[key] = str((path.parent/Path(settings[key]).expanduser()).resolve())
     return settings
+
+
+def settings_path():
+    return Path(os.environ.get('MORSTORM_SETTINGS', ROOT/'settings.local.json')).expanduser().resolve()
+
+
+def read_settings(path):
+    return json.loads(path.read_text(encoding='utf-8-sig')) if path.is_file() else {}
+
+
+def save_fiji_path(value):
+    path = settings_path()
+    current = read_settings(path)
+    fiji = Path(value.strip().strip('"')).expanduser().resolve() if value.strip() else None
+    if fiji is not None and not any((fiji/'jars').glob('ij-*.jar')):
+        raise ValueError('Select the Fiji application folder containing jars/ij-*.jar.')
+    current['fiji_dir'] = str(fiji) if fiji else ''
+    path.parent.mkdir(parents=True, exist_ok=True)
+    save_json(path, current)
+    return current['fiji_dir']
 
 
 def load_profile(mode, backend, method):
@@ -70,14 +94,15 @@ def load_profile(mode, backend, method):
     official['matlab_executable'] = settings.get('matlab_executable') or shutil.which('matlab') or 'matlab'
     config['morphology']['fiji_dir'] = settings.get('fiji_dir','')
     config['local_b_provider_dir'] = settings.get('b_providers',str(ROOT/'local_backends/b'))
+    python = Path(sys.executable)
+    if python.name.lower()=='pythonw.exe':
+        python = python.with_name('python.exe')
+    config['table_python'] = settings.get('python_executable', str(python))
     if mode=='raw':
         if backend=='ThunderSTORM':
             config['localization']['fiji_dir'] = config['morphology']['fiji_dir']
         else:
-            python = Path(sys.executable)
-            if python.name.lower()=='pythonw.exe':
-                python = python.with_name('python.exe')
-            config['localization']['python_executable'] = settings.get('python_executable',str(python))
+            config['localization']['python_executable'] = config['table_python']
     return Profile(mode, backend, method, config)
 
 
@@ -121,7 +146,8 @@ def parse_camera(profile, values):
     return result
 
 
-MODULES = ('localize','drift','morphology')
+MODULES = ('localize', 'drift', 'postfit', 'reconstruct', 'morphology')
+DEFAULT_MODULES = ('localize', 'drift', 'morphology')
 RAW_EXT = {'.tif','.tiff'}
 TABLE_EXT = {'.csv','.hdf5','.h5'}
 ARTIFACTS = {'drift': ('drift.csv','corrected.csv'),
@@ -136,6 +162,10 @@ class Job:
     modules: tuple
     config: dict
     output: Path
+
+
+class JobCancelled(Exception):
+    pass
 
 
 def make_job(profile, engine, source, folder_mode, modules, output_base, pixel, period, camera, render_pixel):
@@ -167,6 +197,11 @@ def configured_profile(profile, modules, pixel, period, camera, render_pixel):
     if 'morphology' in modules:
         cfg['render']['pixel_size_nm'] = number(render_pixel,'Render pixel size')
     if 'localize' in modules:
+        crop = raw_crop.validate(cfg.get('raw_crop'))
+        if crop:
+            cfg['raw_crop'] = crop
+        else:
+            cfg.pop('raw_crop', None)
         loc = cfg['localization']
         loc['pixel_size_nm'] = pixel
         if camera is not None:
@@ -182,6 +217,8 @@ def configured_profile(profile, modules, pixel, period, camera, render_pixel):
                     f'threshold={camera["threshold_sigma"]:g}*std(Wave.F1)',loc['analysis_options'])
             macro = re.sub(r'(?i)(?<!\S)pixelsize=(?:\[[^\]]*\]|\S+)', '', loc['camera_options']).strip()
             loc['camera_options'] = f'{macro} pixelsize={pixel:.17g}'.strip()
+    else:
+        cfg.pop('raw_crop', None)
     cfg['modules'] = list(modules)
     cfg['parameter_preset'] = profile.backend
     return cfg
@@ -189,6 +226,8 @@ def configured_profile(profile, modules, pixel, period, camera, render_pixel):
 
 def inputs(job):
     valid_ext = RAW_EXT if 'localize' in job.modules else TABLE_EXT
+    if 'postfit' in job.modules and 'localize' not in job.modules:
+        valid_ext = TABLE_EXT - {'.csv'} if job.config['parameter_preset']=='Picasso' else {'.csv'}
     if job.folder_mode:
         if not job.source.is_dir():
             raise FileNotFoundError(f'Input folder not found: {job.source}')
@@ -211,6 +250,13 @@ def file_config(job, source, folder):
         inp = {'kind':'localizations','path':str(source),'pixel_size_nm':pixel,
                'format':'csv' if source.suffix.lower()=='.csv' else 'picasso',
                'coordinate_unit':'nm','frame_base':1}
+        if inp['format'] == 'csv':
+            with source.open(encoding='utf-8-sig', newline='') as handle:
+                header = {name.strip().lower(): name.strip() for name in next(csv.reader(handle), [])}
+            if {'x [px]', 'y [px]'} <= header.keys():
+                # Convert XY only. ThunderSTORM axial positions can already be in nm.
+                inp['columns'] = {axis+'_nm': header[f'{axis} [px]'] for axis in 'xy'}
+                inp['xy_in_pixels'] = True
     config.update(input=inp, output_dir=str(folder))
     return config
 
@@ -233,21 +279,32 @@ def check_dependencies(job):
 
     def fiji_check(settings, morphology):
         if not settings.get('fiji_dir'):
-            raise ValueError('Configure the Fiji path with scripts/configure.py before starting this module.')
+            raise ValueError('Enter your Fiji application folder in the Fiji path field.')
         fiji = Path(settings['fiji_dir'])
         plugin = 'MorphoLibJ_*.jar' if morphology else '*Thunder*STORM*.jar'
-        if not any((fiji/'jars').glob('ij-*.jar')) or not any(fiji.rglob(plugin)):
+        found_plugin = any(fiji.rglob(plugin)) if morphology else any(
+            re.search(r'thunder.*storm', jar.name, re.I) for jar in (fiji/'plugins').glob('*.jar'))
+        if not any((fiji/'jars').glob('ij-*.jar')) or not found_plugin:
             raise FileNotFoundError(f'Fiji or {plugin} is missing: {fiji}')
         if not (project/'shared/morstorm-morphology.jar').is_file():
             raise FileNotFoundError(f'MorSTORM Java bridge is missing: {project}')
         explicit = settings.get('java_executable')
         found = Path(explicit).is_file() or shutil.which(explicit) if explicit else (
-            any((fiji/'java').glob('**/bin/java.exe')) or shutil.which('java'))
+            any((fiji/'java').glob('**/bin/java.exe' if os.name == 'nt' else '**/bin/java')) or shutil.which('java'))
         if not found:
             raise FileNotFoundError(f'Java is missing for {fiji}.')
 
     if 'morphology' in job.modules:
         fiji_check(cfg['morphology'],True)
+    if 'reconstruct' in job.modules or ('postfit' in job.modules and cfg['parameter_preset']=='ThunderSTORM'):
+        fiji_check(cfg['morphology'], False)
+    if 'postfit' in job.modules and cfg['parameter_preset']=='Picasso' and job.engine!='A MATLAB':
+        from importlib.util import find_spec
+        if find_spec('picasso') is None:
+            raise ImportError('Picasso is missing in this Python environment.')
+    if job.engine=='A MATLAB' and {'postfit', 'reconstruct'}.intersection(job.modules):
+        if not Path(cfg['table_python']).is_file():
+            raise FileNotFoundError('The configured Python executable for localization tables is missing.')
     if 'localize' in job.modules:
         loc = cfg['localization']
         if loc['backend']=='thunderstorm':
@@ -284,17 +341,16 @@ def inspect_input(config):
         if config['localization']['backend']=='picasso':
             check_picasso_parts(source)
         with tifffile.TiffFile(source) as tif:
-            series = tif.series[0]
-            if len(tif.series)!=1 or series.axes not in ('TYX','ZYX','IYX','QYX'):
-                raise ValueError('Select a single-channel TIFF stack of 2D frames.')
-            frame_count = int(series.shape[0])
+            series = raw_crop.movie_series(tif)
+            frame_count = int(series.shape[0]) if series.axes in raw_crop.STACK_AXES else 1
     else:
         if str(B/'python') not in sys.path:
             sys.path.insert(0,str(B/'python'))
         from morstorm_b.io import read_localizations
         table = read_localizations(source,config['input']).table
         frame_count = int(table.frame.max())
-        occupied = np.sort(table.frame.unique())
+        if 'drift' in config['modules']:
+            occupied = np.sort(table.frame.unique())
     if 'drift' not in config['modules']:
         return frame_count
     if occupied is not None and occupied[0]!=1:
@@ -336,7 +392,8 @@ def command(job, config_path):
     env['PYTHONPATH'] = os.pathsep.join(filter(None,(str(project/'python'),env.get('PYTHONPATH'))))
     if job.engine=='B Python':
         env['MORSTORM_B_LOCAL_PROVIDERS'] = job.config['local_b_provider_dir']
-    if 'localize' in job.modules and job.config['localization']['backend']=='thunderstorm':
+    if ('reconstruct' in job.modules or
+        any(stage in job.modules for stage in ('localize', 'postfit')) and job.config['parameter_preset']=='ThunderSTORM'):
         env.setdefault('JAVA_TOOL_OPTIONS','-Xmx10g')
     gui = Path(__file__).resolve().parent
     if job.engine=='A MATLAB':
@@ -359,49 +416,86 @@ def save_json(path, value):
         temporary.unlink(missing_ok=True)
 
 
-def fingerprint(source):
+def fingerprint(source, cancel):
     digest = sha256()
     with source.open('rb') as file:
         for block in iter(lambda:file.read(1024*1024),b''):
+            if cancel.is_set():
+                raise JobCancelled()
             digest.update(block)
     return digest.hexdigest()
 
 
-def run_item(job, source, folder, notify):
+def run_item(job, source, folder, notify, cancel):
+    if cancel.is_set():
+        raise JobCancelled()
     config = file_config(job,source,folder)
     config_path = folder/'run-config.json'
     save_json(config_path,config)
     frames = inspect_input(config)
     notify('inspection',frames)
-    source_hash = fingerprint(source)
+    source_hash = fingerprint(source, cancel)
+    if cancel.is_set():
+        raise JobCancelled()
+    if 'raw_crop' in config:
+        notify('stage', 'crop')
+        working = folder/'raw-cropped.tif'
+        applied = raw_crop.crop_tiff(source, working, config['raw_crop'], cancel.is_set,
+                                     config['input']['pixel_size_nm'])
+        if applied is None or cancel.is_set():
+            raise JobCancelled()
+        config['crop_applied'] = applied
+        save_json(config_path, config)
+        notify('crop', applied)
     args,env = command(job,config_path)
+    python = Path(sys.executable)
+    if python.name.lower() == 'pythonw.exe':
+        python = python.with_name('python.exe')
+    launcher = Path(__file__).with_name('launch_worker.py')
     last = ''
     with (folder/'console.log').open('w',encoding='utf-8') as log:
-        with subprocess.Popen(args,env=env,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True,
-                              encoding='utf-8',errors='replace',creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0)) as child:
-            for line in child.stdout:
-                log.write(line)
-                log.flush()
-                if line.startswith('::morstorm-stage::'):
-                    notify('stage',line.strip().split('::')[-1])
-                else:
-                    notify('log',line)
-                    if line.strip():
-                        last = line.strip()
+        with worker_process([str(python), str(launcher), *args], env) as (child, stop):
+            def read_console():
+                nonlocal last
+                for line in child.stdout:
+                    log.write(line)
+                    log.flush()
+                    if line.startswith('::morstorm-stage::'):
+                        notify('stage',line.strip().split('::')[-1])
+                    else:
+                        notify('log',line)
+                        if line.strip():
+                            last = line.strip()
+
+            reader = Thread(target=read_console, daemon=True)
+            reader.start()
+            while child.poll() is None or reader.is_alive():
+                if cancel.wait(.15):
+                    stop()
+                    break
             code = child.wait()
+            reader.join()
+    if cancel.is_set():
+        raise JobCancelled()
     if code:
         raise RuntimeError(f'Exit code {code}. {last}')
     result = json.loads((folder/'stage-result.json').read_text(encoding='utf-8-sig'))
+    if 'crop_applied' in config:
+        result['raw_crop'] = config['crop_applied']
     required = [name for stage in job.modules for name in ARTIFACTS.get(stage,())]
     if 'localize' in job.modules:
         required.append(result['localization']['output'])
+    required.extend(result[stage]['output'] for stage in ('postfit', 'reconstruct') if stage in job.modules)
+    if 'postfit.hdf5' in required:
+        required.append('postfit.yaml')
     if any(not (folder/name).is_file() for name in required):
         raise RuntimeError('The selected modules did not produce all expected artifacts.')
     return {**result,'input_sha256':source_hash}
 
 
-def run(job, notify):
+def run(job, notify, cancel=None):
     """Run each file in isolation and save a progress ledger in the job folder."""
+    cancel = cancel if cancel is not None else Event()
     try:
         paths = inputs(job)
         check_dependencies(job)
@@ -412,6 +506,8 @@ def run(job, notify):
         save_json(report_path,report)
         notify('batch_start',len(paths))
         for index,source in enumerate(paths,1):
+            if cancel.is_set():
+                break
             stem = re.sub(r'[^\w.-]+','_',source.stem).strip('._')[:56] or 'input'
             folder = job.output/f'{index:03d}-{stem}'
             folder.mkdir()
@@ -420,17 +516,23 @@ def run(job, notify):
             save_json(report_path,report)
             notify('file',(index,len(paths),source.name,folder))
             try:
-                result = run_item(job,source,folder,notify)
+                result = run_item(job,source,folder,notify,cancel)
                 item.update(status='complete',localizations=result['localizations'],last_frame=result['last_frame'])
                 save_json(folder/'manifest.json',{**item,**result,'modules':list(job.modules),'engine':job.engine})
+            except JobCancelled:
+                item.update(status='cancelled')
+                save_json(folder/'manifest.json',{**item,'modules':list(job.modules),'engine':job.engine})
             except Exception as error:
                 item.update(status='failed',error=str(error))
                 save_json(folder/'manifest.json',{**item,'modules':list(job.modules),'engine':job.engine})
             save_json(report_path,report)
             notify('file_done',item.copy())
         report['completed'] = sum(item['status']=='complete' for item in report['files'])
-        report['failed'] = len(paths)-report['completed']
-        report['status'] = 'complete' if not report['failed'] else 'completed_with_failures'
+        report['failed'] = sum(item['status']=='failed' for item in report['files'])
+        report['cancelled'] = sum(item['status']=='cancelled' for item in report['files'])
+        report['unstarted'] = len(paths)-len(report['files'])
+        report['status'] = ('cancelled' if report['cancelled'] or report['unstarted'] else
+                            'completed_with_failures' if report['failed'] else 'complete')
         save_json(report_path,report)
         notify('complete',report)
     except Exception as error:

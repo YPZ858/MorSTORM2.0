@@ -3,15 +3,92 @@ import json
 from pathlib import Path
 import sys
 import tempfile
+from threading import Event
 import unittest
+from unittest.mock import patch
 
+import numpy as np
+import tifffile
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'gui'))
 import parameters
+import raw_crop
 import runner
 
 
 class ParameterPresets(unittest.TestCase):
+    def test_percent_crop_preserves_frames_and_restores_coordinates(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source, target = root/'source.tif', root/'raw-cropped.tif'
+            movie = np.arange(3*9*11, dtype=np.uint16).reshape(3, 9, 11)
+            tifffile.imwrite(source, movie, photometric='minisblack', compression='deflate', metadata={'axes': 'TYX'})
+            profile = runner.load_profile('raw', 'ThunderSTORM', 'meanshift')
+            profile.config['raw_crop'] = {'left': 20, 'top': 25, 'right': 70, 'bottom': 75}
+            preset = root/'preset.json'
+            runner.save_json(preset, parameters.export_preset(profile, ('localize',), 100, 8, 10))
+            restored, _ = parameters.import_preset(preset, 'ThunderSTORM')
+            applied = raw_crop.crop_tiff(source, target, restored.config['raw_crop'], lambda: False, 100)
+            np.testing.assert_array_equal(tifffile.imread(target), movie[:, 2:7, 2:8])
+            np.testing.assert_array_equal(tifffile.imread(source), movie)
+            self.assertEqual(applied['bounds_xyxy_px'], [2, 2, 8, 7])
+            self.assertEqual(applied['frames'], 3)
+
+            table = root/'localized.csv'
+            table.write_text('frame,x [nm],y [nm],z [nm]\n2,15,25,35\n', encoding='utf-8')
+            raw_crop.restore_localizations(table, applied)
+            from morstorm_b.io import read_localizations
+            row = read_localizations(table, {}).table.iloc[0]
+            self.assertEqual(tuple(row), (2, 215, 225, 35))
+
+            table.write_text('id\n', encoding='utf-8')
+            with self.assertRaisesRegex(ValueError, 'no localizations in the cropped TIFF'):
+                raw_crop.restore_localizations(table, applied)
+            self.assertEqual(table.read_text(encoding='utf-8'), 'id\n')
+            self.assertFalse(table.with_suffix('.csv.partial').exists())
+
+    def test_import_and_postfit_preset_round_trip(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / 'table.csv'
+            source.write_text('frame,x [px],y [px],z [nm]\n1,2,3,45\n', encoding='utf-8')
+            profile = runner.load_profile('cached', 'ThunderSTORM', 'meanshift')
+            panel = 'ThunderSTORM postfit'
+            parameters.set_values(profile.config, panel, {**parameters.values(profile.config, panel),
+                                                          'density': True, 'merge': True, 'merge_nm': 35})
+            modules = ('postfit', 'reconstruct')
+            saved = root / 'preset.json'
+            runner.save_json(saved, parameters.export_preset(profile, modules, 100, 8, 10))
+            restored, stages = parameters.import_preset(saved, 'Picasso')
+            job = runner.make_job(restored, 'B Python', str(source), False, stages, directory, 100, 8, None, 10)
+            config = runner.file_config(job, source, root)
+            self.assertEqual(job.modules, modules)
+            self.assertEqual(config['postfit']['merge_nm'], 35)
+            from morstorm_b.io import read_localizations
+            table = read_localizations(source, config['input']).table
+            self.assertEqual(tuple(table.iloc[0][['x_nm', 'y_nm', 'z_nm']]), (200, 300, 45))
+
+    def test_cancelled_batch_preserves_completed_files(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for name in ('a.csv', 'b.csv', 'c.csv'):
+                (root/name).touch()
+            profile = runner.load_profile('cached', 'ThunderSTORM', 'meanshift')
+            job = runner.make_job(profile, 'B Python', str(root), True, ('drift',), directory, 100, 8, None, 10)
+            cancel = Event()
+
+            def run_item(_job, source, _folder, _notify, _cancel):
+                if source.name == 'b.csv':
+                    cancel.set()
+                    raise runner.JobCancelled()
+                return {'localizations': 3, 'last_frame': 3}
+
+            with patch.object(runner, 'check_dependencies'), patch.object(runner, 'run_item', side_effect=run_item):
+                runner.run(job, lambda *_: None, cancel)
+            report = json.loads((job.output/'batch-report.json').read_text(encoding='utf-8'))
+            self.assertEqual(report['status'], 'cancelled')
+            self.assertEqual((report['completed'], report['failed'], report['cancelled'], report['unstarted']), (1, 0, 1, 1))
+
     def test_audit_profiles_round_trip(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / 'preset.json'
